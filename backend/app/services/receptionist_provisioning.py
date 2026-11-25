@@ -335,6 +335,7 @@ def _assistant_payload(
         "model": {
             "provider": settings.VAPI_MODEL_PROVIDER,
             "model": settings.VAPI_MODEL,
+            "temperature": settings.VAPI_MODEL_TEMPERATURE,
             "tools": [_knowledge_search_tool(settings)],
             "messages": [
                 {
@@ -346,6 +347,10 @@ def _assistant_payload(
         "voice": {
             "provider": settings.VAPI_VOICE_PROVIDER,
             "voiceId": settings.VAPI_VOICE_ID,
+            "stability": settings.VAPI_VOICE_STABILITY,
+            "similarityBoost": settings.VAPI_VOICE_SIMILARITY_BOOST,
+            "speed": settings.VAPI_VOICE_SPEED,
+            "model": settings.VAPI_VOICE_MODEL,
         },
         "transcriber": {
             "provider": "deepgram",

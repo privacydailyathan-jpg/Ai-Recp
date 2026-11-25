@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     VAPI_MODEL: str = "gpt-4o-mini"
     VAPI_VOICE_PROVIDER: str = "11labs"
     VAPI_VOICE_ID: str = "paula"
+    VAPI_VOICE_STABILITY: float = 0.4
+    VAPI_VOICE_SIMILARITY_BOOST: float = 0.8
+    VAPI_VOICE_SPEED: float = 0.9
+    VAPI_VOICE_MODEL: str = "eleven_multilingual_v2"
+    VAPI_MODEL_TEMPERATURE: float = 0.7
     KNOWLEDGE_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     KNOWLEDGE_EMBEDDING_DIMENSIONS: int = 384
     KNOWLEDGE_EMBEDDING_BATCH_SIZE: int = 8
