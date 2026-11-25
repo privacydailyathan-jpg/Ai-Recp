@@ -347,6 +347,11 @@ def _assistant_payload(
             "provider": settings.VAPI_VOICE_PROVIDER,
             "voiceId": settings.VAPI_VOICE_ID,
         },
+        "stt": {
+            "provider": "deepgram",
+            "model": "nova-2-general",
+            "language": "en",
+        },
         "server": _server_config(settings),
         "serverMessages": ["status-update", "end-of-call-report"],
         "metadata": {
