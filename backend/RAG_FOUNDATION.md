@@ -1,7 +1,8 @@
 # Hybrid RAG foundation
 
-This document covers the initial business-scoped document-ingestion foundation.
-Semantic retrieval and Vapi custom tools are intentionally not part of this phase.
+This document covers business-scoped knowledge ingestion, hybrid retrieval,
+and the authenticated Vapi knowledge-search tool. LLM answer generation is
+intentionally not part of this phase.
 
 ## Requirements
 
@@ -89,23 +90,70 @@ Run the unit/API tests with:
 
 ```bash
 cd backend
-.venv/bin/python -m pytest tests/test_knowledge.py
+.venv/bin/python -m pytest \
+  tests/test_knowledge.py \
+  tests/test_knowledge_retrieval.py
 ```
 
-The PostgreSQL integrity test runs only when `VAPI_TEST_DATABASE_URL` points to
-a local, isolated database named `vapi_test_*` where pgvector is enabled:
+PostgreSQL retrieval and integrity tests run only when
+`VAPI_TEST_DATABASE_URL` points to a local, isolated database named
+`vapi_test_*` where pgvector is enabled:
 
 ```bash
 .venv/bin/python -m pytest tests/test_knowledge_postgres.py
 ```
 
 SQLite tests cover extraction, chunking, mocked embeddings, ingestion
-transactions, and API authorization. PostgreSQL-specific vector and composite
-foreign-key behavior must be verified using PostgreSQL; SQLite is not a
-substitute for vector search tests.
+transactions, API authorization, retrieval ranking, and context construction.
+PostgreSQL integration tests exercise cosine similarity, full-text search,
+hybrid retrieval, tenant isolation, and document-status filtering in a
+temporary schema. SQLite is not a substitute for PostgreSQL-specific search
+behavior.
 
 ## Current limitations
 
-Knowledge documents can be uploaded, processed, listed, read, and deleted.
-There is not yet a semantic retrieval API, structured business service catalog,
-hybrid retrieval/reranking pipeline, vector query service, or Vapi custom tool.
+`POST /api/v1/knowledge/search?business_id=<uuid>` returns authorized ranked
+chunks using pgvector cosine distance and PostgreSQL simple-language full-text
+search. It merges the independently ranked lists using reciprocal rank fusion
+with `k=60`. Both queries require matching chunk/document business IDs and a
+completed parent document. The request body contains `query` and optional
+`top_k`, never a tenant ID.
+
+The context builder formats ranked whole chunks under a character budget and
+returns chunk/document/page references for the included content. Search does
+not generate LLM answers or provide a structured business service catalog.
+
+## Vapi knowledge-search tool
+
+Newly created assistants receive the `search_business_knowledge` function
+through their model `tools` configuration. Vapi sends `tool-calls` requests to
+the tool's dedicated server URL:
+
+```text
+POST /api/v1/integrations/vapi/knowledge-tool
+Authorization: Bearer <VAPI_WEBHOOK_SECRET>
+```
+
+The endpoint also accepts multiple function calls in one Vapi message. It
+resolves the assistant and/or phone-number IDs from the Vapi call object to one
+unique, enabled configuration with a matching active provisioning record.
+Business IDs in tool arguments and arbitrary request metadata are ignored.
+The existing webhook authorization mechanism is used, and the endpoint
+delegates to `retrieve_hybrid()` with the resolved business ID. Both the
+retriever's SQL filters and a response-scope check enforce tenant isolation.
+
+Successful tool results are flat JSON strings containing only a `found` flag,
+retrieved text, and source filenames. Internal UUIDs, database fields, source
+URLs, and embeddings are not returned. Empty retrieval tells the assistant
+there is no verified knowledge and not to guess. Retrieval failures use Vapi's
+per-call `error` field with a safe fallback message. The endpoint limits a
+batch to eight calls, uses a five-chunk retrieval limit, and caps context at
+6,000 characters; the configured Vapi tool server timeout is 20 seconds.
+
+The existing status-update and end-of-call-report webhook remains unchanged.
+For an already-existing Vapi-native assistant, adding this tool to the backend
+payload does not alter the live assistant. Add the Function tool in the Vapi
+Dashboard using the endpoint above, the required `query` string argument, and
+the same Bearer credential configured for `VAPI_WEBHOOK_SECRET`. Verify the
+assignment and configuration in the Dashboard. No assistant update or provider
+API call is made by this integration.

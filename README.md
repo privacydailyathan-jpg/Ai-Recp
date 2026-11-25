@@ -99,6 +99,107 @@ Run the backend tests with:
 PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/ -q
 ```
 
+### Knowledge retrieval
+
+Knowledge search runs semantic retrieval with the configured, normalized
+384-dimensional Sentence Transformers embedding and pgvector cosine distance.
+It also runs PostgreSQL full-text search using `to_tsvector('simple', ...)`,
+`plainto_tsquery('simple', ...)`, and `ts_rank_cd`. The two ranked lists are
+combined with reciprocal rank fusion (`1 / (60 + rank)` by default); chunk
+UUIDs are deduplicated and ties are ordered deterministically.
+
+Both retrieval queries filter chunks by the authorized business ID and join
+their parent document, requiring that the document's business ID matches and
+its processing status is `completed`. The search request does not accept a
+business ID in its JSON body. As with other business-scoped endpoints, the
+business is selected with a `business_id` query parameter and authorized by
+the existing membership/permission dependency.
+
+Search an authorized workspace:
+
+```http
+POST /api/v1/knowledge/search?business_id=<business-uuid>
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{"query": "weekday opening hours", "top_k": 5}
+```
+
+Example response:
+
+```json
+{
+  "query": "weekday opening hours",
+  "results": [
+    {
+      "chunk_id": "00000000-0000-0000-0000-000000000001",
+      "document_id": "00000000-0000-0000-0000-000000000002",
+      "business_id": "00000000-0000-0000-0000-000000000003",
+      "chunk_index": 0,
+      "chunk_text": "We are open weekdays from 9 AM to 5 PM.",
+      "chunk_metadata": {"page_number": 2},
+      "document_filename": "hours.pdf",
+      "document_source": "https://example.test/hours.pdf",
+      "semantic_distance": 0.12,
+      "keyword_score": 0.21,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "rrf_score": 0.03278688524590164
+    }
+  ],
+  "documents": [
+    {
+      "document_id": "00000000-0000-0000-0000-000000000002",
+      "document_filename": "hours.pdf",
+      "document_source": "https://example.test/hours.pdf"
+    }
+  ]
+}
+```
+
+The response contains ranked chunks, document/source references, chunk
+metadata, and available semantic/keyword ranking details. It never includes
+embedding vectors. An empty query or a workspace with no completed knowledge
+returns empty `results` and `documents` arrays. The separate context builder
+can assemble whole ranked chunks within a character budget and preserve their
+references; answer generation is not part of this stage.
+
+Run the focused retrieval tests with:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python -m pytest \
+  backend/tests/test_knowledge.py \
+  backend/tests/test_knowledge_retrieval.py \
+  backend/tests/test_knowledge_postgres.py -q
+```
+
+The PostgreSQL tests require `VAPI_TEST_DATABASE_URL` to point to a local,
+isolated `vapi_test_*` database with pgvector installed and enabled. They
+create and remove a unique temporary schema per test.
+
+### Vapi knowledge-search tool
+
+New assistants created from the backend assistant payload register the
+`search_business_knowledge` function. Vapi sends function requests to
+`POST /api/v1/integrations/vapi/knowledge-tool`, authenticated with the same
+Bearer credential used by the existing Vapi webhook. The endpoint accepts Vapi's
+`message.type = "tool-calls"` format, supports up to eight tool calls per
+request, and returns a flat string result for every `toolCallId`.
+
+The endpoint resolves the active business only from registered assistant and/or
+phone-number IDs matched against enabled Vapi and receptionist configurations
+and an active provisioning record. It ignores any business ID in function
+arguments, passes the resolved business ID to the existing hybrid retriever,
+and does not return database IDs, embeddings, or source URLs. Empty results
+explicitly tell the assistant not to guess. Existing status-update and
+end-of-call-report processing remains on the original webhook endpoint.
+
+The backend payload change does not update an already-existing Vapi-native
+assistant. To enable the tool for one, add a Function tool in the Vapi Dashboard
+pointing to the endpoint above, with a required `query` string parameter and
+the configured Bearer authentication. This is a manual dashboard change; the
+application does not make Vapi API calls to modify existing assistants.
+
 ### Frontend
 
 The React frontend uses JavaScript and JSX. From the repository root:
@@ -153,6 +254,18 @@ Provisioning moves a business to `ready` only after the assistant and phone
 number are configured. The owner must explicitly activate it before calls are
 handled. Failed provisioning is reported as `failed`; it is never presented as
 active. Number purchase consent is recorded with the consenting user and time.
+
+For an existing Vapi-native assistant/phone connection, use the separate
+authenticated endpoint
+`POST /api/v1/businesses/{business_id}/receptionist/activate-existing`.
+It requires the existing Vapi connection and a valid saved receptionist
+configuration, and uses the existing business permission checks. Confirm the
+phone assignment in the Vapi Dashboard before calling it: this path does not
+make provider requests or independently verify the assignment. It records the
+connection as `vapi_native`, does not create phone-purchase consent or Twilio
+records, and does not change the assistant or phone configuration. It requires
+`VAPI_API_KEY`, `VAPI_WEBHOOK_SECRET`, and `PUBLIC_API_BASE_URL`, but not Twilio
+credentials. Apply database migrations before using this endpoint.
 
 Assistant model and voice selections are controlled by the server-side
 `VAPI_MODEL_PROVIDER`, `VAPI_MODEL`, `VAPI_VOICE_PROVIDER`, and `VAPI_VOICE_ID`

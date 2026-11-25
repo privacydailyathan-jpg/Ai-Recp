@@ -22,9 +22,11 @@ from app.services.billing import enforce_provisioning_entitlements
 from app.services.business_authorization import BusinessPermission
 from app.services.receptionist_provisioning import (
     DEFAULT_FALLBACK_INSTRUCTIONS,
+    activate_existing_vapi_receptionist,
     activate_receptionist,
     provision_receptionist,
     provisioning_error_message,
+    synchronize_vapi_native_knowledge_tool,
     update_provisioned_assistant,
 )
 
@@ -82,6 +84,9 @@ def _read_onboarding(
         attempts=provisioning.attempts if provisioning is not None else 0,
         phone_number_consent_given=(
             provisioning.consented_at is not None if provisioning is not None else False
+        ),
+        connection_type=(
+            provisioning.connection_type if provisioning is not None else None
         ),
     )
 
@@ -169,12 +174,25 @@ def save_business_onboarding(
     )
     configuration.selected_services = list(payload.selected_services)
 
-    if provisioning is None:
+    has_existing_vapi_connection = (
+        db.scalar(
+            select(VapiConfiguration.id).where(
+                VapiConfiguration.business_id == business.id
+            )
+        )
+        is not None
+    )
+    if provisioning is None and not has_existing_vapi_connection:
         provisioning = ReceptionistProvisioning(business_id=business.id)
         db.add(provisioning)
 
     try:
-        if provisioning.assistant_id is not None:
+        if (
+            provisioning is not None
+            and
+            provisioning.assistant_id is not None
+            and provisioning.connection_type == "twilio_managed"
+        ):
             update_provisioned_assistant(
                 business,
                 configuration,
@@ -188,7 +206,8 @@ def save_business_onboarding(
 
     db.refresh(business)
     db.refresh(configuration)
-    db.refresh(provisioning)
+    if provisioning is not None:
+        db.refresh(provisioning)
     return _read_onboarding(business, configuration, provisioning)
 
 
@@ -221,6 +240,27 @@ def start_or_retry_provisioning(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Save your business onboarding before starting setup.",
+        )
+    provisioning = db.scalar(
+        select(ReceptionistProvisioning)
+        .where(ReceptionistProvisioning.business_id == business.id)
+        .with_for_update()
+    )
+    vapi_configuration = db.scalar(
+        select(VapiConfiguration).where(VapiConfiguration.business_id == business.id)
+    )
+    if vapi_configuration is not None and (
+        provisioning is None
+        or provisioning.connection_type != "twilio_managed"
+        or provisioning.assistant_id != vapi_configuration.assistant_id
+        or provisioning.phone_number_id != vapi_configuration.phone_number_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "An existing Vapi connection cannot use phone provisioning. "
+                "Use the existing-connection activation endpoint."
+            ),
         )
     enforce_provisioning_entitlements(db, business.id)
     db.commit()
@@ -276,6 +316,12 @@ def activate_business_receptionist(
         select(VapiConfiguration).where(VapiConfiguration.business_id == business.id)
     )
     if receptionist_configuration is None or vapi_configuration is None:
+        if receptionist_configuration is not None:
+            receptionist_configuration.is_enabled = False
+        if vapi_configuration is not None:
+            vapi_configuration.is_enabled = False
+        if receptionist_configuration is not None or vapi_configuration is not None:
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Complete receptionist setup before activation.",
@@ -289,3 +335,90 @@ def activate_business_receptionist(
         db,
     )
     return _read_onboarding(business, receptionist_configuration, result)
+
+
+@router.post(
+    "/receptionist/activate-existing",
+    response_model=BusinessOnboardingRead,
+)
+def activate_existing_business_receptionist(
+    business: Annotated[
+        Business,
+        Depends(
+            require_business_permission(BusinessPermission.PROVISION_RECEPTIONIST)
+        ),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> BusinessOnboardingRead:
+    receptionist_configuration = db.scalar(
+        select(ReceptionistConfiguration).where(
+            ReceptionistConfiguration.business_id == business.id
+        )
+    )
+    vapi_configuration = db.scalar(
+        select(VapiConfiguration).where(VapiConfiguration.business_id == business.id)
+    )
+    if receptionist_configuration is None or vapi_configuration is None:
+        if receptionist_configuration is not None:
+            receptionist_configuration.is_enabled = False
+        if vapi_configuration is not None:
+            vapi_configuration.is_enabled = False
+        if receptionist_configuration is not None or vapi_configuration is not None:
+            db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Save a receptionist configuration and Vapi connection first.",
+        )
+
+    provisioning = activate_existing_vapi_receptionist(
+        business,
+        receptionist_configuration,
+        vapi_configuration,
+        db,
+    )
+    return _read_onboarding(business, receptionist_configuration, provisioning)
+
+
+@router.post(
+    "/receptionist/sync-knowledge-tool",
+    response_model=BusinessOnboardingRead,
+)
+def synchronize_existing_vapi_knowledge_tool(
+    business: Annotated[
+        Business,
+        Depends(
+            require_business_permission(BusinessPermission.PROVISION_RECEPTIONIST)
+        ),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> BusinessOnboardingRead:
+    receptionist_configuration = db.scalar(
+        select(ReceptionistConfiguration).where(
+            ReceptionistConfiguration.business_id == business.id
+        )
+    )
+    vapi_configuration = db.scalar(
+        select(VapiConfiguration).where(VapiConfiguration.business_id == business.id)
+    )
+    provisioning = db.scalar(
+        select(ReceptionistProvisioning).where(
+            ReceptionistProvisioning.business_id == business.id
+        )
+    )
+    if (
+        receptionist_configuration is None
+        or vapi_configuration is None
+        or provisioning is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active Vapi connection is required before synchronization.",
+        )
+    synchronize_vapi_native_knowledge_tool(
+        business,
+        receptionist_configuration,
+        vapi_configuration,
+        provisioning,
+        require_active=True,
+    )
+    return _read_onboarding(business, receptionist_configuration, provisioning)

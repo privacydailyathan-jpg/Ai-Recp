@@ -522,7 +522,9 @@ admin_router = APIRouter(
     tags=["billing administration"],
     dependencies=[Depends(require_platform_billing_admin)],
 )
-
+@admin_router.get("/access")
+def check_billing_admin_access() -> dict[str, bool]:
+    return {"allowed": True}
 
 @admin_router.get("/overview")
 def get_billing_overview(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:

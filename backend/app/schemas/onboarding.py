@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 SupportedReceptionistService = Literal["call_answering"]
+ReceptionistConnectionType = Literal["twilio_managed", "vapi_native"]
 
 
 class BusinessOnboardingUpdate(BaseModel):
@@ -112,6 +113,7 @@ class BusinessOnboardingRead(BaseModel):
     selected_services: list[str]
     business_timezone: str
     status: str
+    connection_type: ReceptionistConnectionType | None
     phone_number: str | None
     safe_error_code: str | None
     error_message: str | None

@@ -58,6 +58,16 @@ class VapiClient:
             raise VapiProviderError()
         return response
 
+    def get_assistant(self, assistant_id: str) -> dict[str, Any]:
+        response = self._request("GET", f"/assistant/{assistant_id}")
+        if (
+            not isinstance(response, dict)
+            or not isinstance(response.get("id"), str)
+            or response["id"] != assistant_id
+        ):
+            raise VapiProviderError()
+        return response
+
     def update_assistant(self, assistant_id: str, payload: dict[str, Any]) -> None:
         self._request("PATCH", f"/assistant/{assistant_id}", payload=payload)
 

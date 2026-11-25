@@ -27,8 +27,12 @@ class ReceptionistProvisioning(Base):
         UniqueConstraint("phone_number", name="uq_receptionist_provisionings_phone_number"),
         UniqueConstraint("twilio_phone_sid", name="uq_receptionist_provisionings_twilio_sid"),
         CheckConstraint(
-            "status IN ('draft', 'setup_in_progress', 'ready', 'active', 'failed')",
+            "status IN ('draft', 'setup_in_progress', 'ready', 'connected', 'active', 'failed')",
             name="ck_receptionist_provisionings_status",
+        ),
+        CheckConstraint(
+            "connection_type IN ('twilio_managed', 'vapi_native')",
+            name="ck_receptionist_provisionings_connection_type",
         ),
         CheckConstraint("attempts >= 0", name="ck_receptionist_provisionings_attempts"),
         Index("ix_receptionist_provisionings_status", "status"),
@@ -41,6 +45,12 @@ class ReceptionistProvisioning(Base):
     )
     status: Mapped[str] = mapped_column(
         String(24), nullable=False, default="draft", server_default="draft"
+    )
+    connection_type: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="twilio_managed",
+        server_default="twilio_managed",
     )
     assistant_id: Mapped[str | None] = mapped_column(String(255))
     phone_number_id: Mapped[str | None] = mapped_column(String(255))

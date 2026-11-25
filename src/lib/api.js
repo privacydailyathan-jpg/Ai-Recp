@@ -54,12 +54,21 @@ async function request(path, options = {}, authenticated = true) {
     window.dispatchEvent(new Event("auth:expired"));
   }
   if (!response.ok) {
-    throw new ApiError(
-      messageForStatus(response.status, path),
-      response.status,
-      response.headers.get("X-Request-ID")
-    );
-  }
+  const errorBody = await response.clone().text();
+
+  console.error("API request failed:", {
+    path,
+    status: response.status,
+    requestId: response.headers.get("X-Request-ID"),
+    response: errorBody,
+  });
+
+  throw new ApiError(
+    messageForStatus(response.status, path),
+    response.status,
+    response.headers.get("X-Request-ID")
+  );
+}
   if (response.status === 204) return void 0;
   try {
     return await response.json();
@@ -113,6 +122,10 @@ const api = {
     `/businesses/${businessId}/receptionist/activate`,
     json("POST")
   ),
+  activateExistingReceptionist: (businessId) => request(
+  `/businesses/${businessId}/receptionist/activate-existing`,
+  json("POST")
+),
   members: (businessId) => request(`/businesses/${businessId}/members`),
   addMember: (businessId, email, role) => request(
     `/businesses/${businessId}/members`,
@@ -158,6 +171,7 @@ const api = {
   },
   call: (businessId, callId) => request(`/businesses/${businessId}/calls/${callId}`),
   billingPlans: () => request("/billing/plans"),
+  adminBillingAccess: () => request("/admin/billing/access"),
   billingSubscription: (businessId) => request(`/businesses/${businessId}/billing/subscription`),
   billingUsage: (businessId) => request(`/businesses/${businessId}/billing/usage`),
   billingInvoices: (businessId) => request(`/businesses/${businessId}/billing/invoices`),

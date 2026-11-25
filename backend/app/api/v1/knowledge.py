@@ -20,16 +20,29 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.knowledge import KnowledgeDocument
-from app.schemas.knowledge import KnowledgeDocumentPage, KnowledgeDocumentRead
+from app.schemas.knowledge import (
+    KnowledgeDocumentPage,
+    KnowledgeDocumentRead,
+    KnowledgeSearchChunk,
+    KnowledgeSearchDocumentReference,
+    KnowledgeSearchRequest,
+    KnowledgeSearchResponse,
+)
 from app.services.business_authorization import BusinessPermission
 from app.services.document_extraction import DocumentValidationError
+from app.services.embedding import EmbeddingServiceError
 from app.services.knowledge_ingestion import (
     DocumentAlreadyProcessing,
     DocumentIngestionError,
     ingest_document,
 )
+from app.services.knowledge_retrieval import (
+    KnowledgeRetrievalResult,
+    retrieve_hybrid,
+)
 
 router = APIRouter(prefix="/knowledge/documents", tags=["knowledge documents"])
+search_router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
 def _read_upload(upload: UploadFile, max_bytes: int) -> bytes:
@@ -179,3 +192,64 @@ def delete_knowledge_document(
         )
     db.delete(document)
     db.commit()
+
+
+@search_router.post("/search", response_model=KnowledgeSearchResponse)
+def search_knowledge(
+    request: KnowledgeSearchRequest,
+    business: Annotated[
+        Business,
+        Depends(require_business_permission(BusinessPermission.READ)),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> KnowledgeSearchResponse:
+    try:
+        results = retrieve_hybrid(
+            db,
+            business_id=business.id,
+            query=request.query,
+            limit=request.top_k,
+        )
+    except EmbeddingServiceError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Knowledge search is temporarily unavailable",
+        ) from error
+
+    documents_by_id: dict[UUID, KnowledgeSearchDocumentReference] = {}
+    response_results: list[KnowledgeSearchChunk] = []
+    for result in results:
+        documents_by_id.setdefault(
+            result.document_id,
+            KnowledgeSearchDocumentReference(
+                document_id=result.document_id,
+                document_filename=result.document_filename,
+                document_source=result.document_source,
+            ),
+        )
+        response_results.append(_search_chunk_response(result))
+    return KnowledgeSearchResponse(
+        query=request.query,
+        results=response_results,
+        documents=list(documents_by_id.values()),
+    )
+
+
+def _search_chunk_response(
+    result: KnowledgeRetrievalResult,
+) -> KnowledgeSearchChunk:
+    return KnowledgeSearchChunk(
+        chunk_id=result.chunk_id,
+        document_id=result.document_id,
+        business_id=result.business_id,
+        chunk_index=result.chunk_index,
+        chunk_text=result.chunk_text,
+        chunk_metadata=result.chunk_metadata,
+        document_filename=result.document_filename,
+        document_source=result.document_source,
+        semantic_distance=result.semantic_distance,
+        keyword_score=result.keyword_score,
+        semantic_rank=result.semantic_rank,
+        keyword_rank=result.keyword_rank,
+        rrf_score=result.rrf_score,
+    )

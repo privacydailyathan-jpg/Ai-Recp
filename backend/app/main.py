@@ -13,6 +13,7 @@ from app.api.v1.billing import router as billing_router
 from app.api.v1.businesses import router as businesses_router
 from app.api.v1.health import router as health_router
 from app.api.v1.knowledge import router as knowledge_router
+from app.api.v1.knowledge import search_router as knowledge_search_router
 from app.api.v1.onboarding import router as onboarding_router
 from app.api.v1.receptionist_configurations import (
     router as receptionist_configurations_router,
@@ -101,6 +102,7 @@ app.add_middleware(
 
 app.include_router(health_router, prefix=settings.API_V1_PREFIX)
 app.include_router(knowledge_router, prefix=settings.API_V1_PREFIX)
+app.include_router(knowledge_search_router, prefix=settings.API_V1_PREFIX)
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
 app.include_router(billing_router, prefix=settings.API_V1_PREFIX)
 app.include_router(businesses_router, prefix=settings.API_V1_PREFIX)

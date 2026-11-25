@@ -1,6 +1,12 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+)
 
 VapiCallStatus = Literal[
     "scheduled",
@@ -99,3 +105,64 @@ class VapiEndOfCallReportEnvelope(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     message: VapiEndOfCallReportMessage
+
+
+class VapiToolIdentity(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str | None = Field(default=None, min_length=1, max_length=255, pattern=r"^\S+$")
+
+
+class VapiToolCallContext(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    assistantId: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        pattern=r"^\S+$",
+    )
+    phoneNumberId: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        pattern=r"^\S+$",
+    )
+    assistant: VapiToolIdentity | None = None
+    phoneNumber: VapiToolIdentity | None = None
+
+
+class VapiToolCallFunction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str = Field(min_length=1, max_length=128)
+    arguments: dict[str, object] | str
+
+
+class VapiToolCall(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(min_length=1, max_length=255, pattern=r"^\S+$")
+    type: Literal["function"]
+    function: VapiToolCallFunction
+
+
+class VapiToolCallsMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["tool-calls"]
+    call: VapiToolCallContext
+    assistant: VapiToolIdentity | None = None
+    toolCallList: list[VapiToolCall] = Field(min_length=1, max_length=8)
+
+
+class VapiToolCallsEnvelope(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    message: VapiToolCallsMessage
+
+
+class KnowledgeSearchToolArguments(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    query: Annotated[str, StringConstraints(max_length=4000)]
