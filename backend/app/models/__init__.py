@@ -17,6 +17,11 @@ from app.models.receptionist_provisioning import ReceptionistProvisioning
 from app.models.user import User
 from app.models.vapi_call import VapiCall, VapiCallEvent
 from app.models.vapi_configuration import VapiConfiguration
+from app.models.appointment import (
+    Appointment,
+    AppointmentSettings,
+    AppointmentStatus,
+)
 
 __all__ = [
     "BillingAuditLog",
@@ -40,4 +45,7 @@ __all__ = [
     "VapiCall",
     "VapiCallEvent",
     "VapiConfiguration",
+    "Appointment",
+    "AppointmentSettings",
+    "AppointmentStatus",
 ]

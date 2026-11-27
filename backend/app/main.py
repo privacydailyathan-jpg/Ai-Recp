@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.appointments import router as appointments_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.businesses import router as businesses_router
 from app.api.v1.health import router as health_router
@@ -97,6 +98,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+)
+app.include_router(
+    appointments_router,
+    prefix=settings.API_V1_PREFIX,
 )
 
 
