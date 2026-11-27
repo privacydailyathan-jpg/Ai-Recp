@@ -1,6 +1,14 @@
 
-import { useEffect, useState } from "react";
-import { ArrowRight, AudioLines, Check, Phone } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowRight,
+  AudioLines,
+  Check,
+  FileText,
+  Phone,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { useBusiness } from "../business/BusinessContext";
 import {
@@ -14,6 +22,22 @@ import {
   StatusBadge,
 } from "../components/ui";
 import { api, userFacingErrorMessage } from "../lib/api";
+
+const MAX_DOCUMENT_SIZE = 20 * 1024 * 1024;
+
+const formatFileSize = (bytes) => {
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const isSupportedDocument = (file) => {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  return ["pdf", "docx", "txt"].includes(extension);
+};
 
 const initialForm = (business) => ({
   name: business?.name ?? "",
@@ -49,12 +73,20 @@ function OnboardingPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  const [knowledgeFile, setKnowledgeFile] = useState(null);
+  const [knowledgeFileError, setKnowledgeFileError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+
+  const fileInputRef = useRef(null);
+
   useEffect(() => {
     let active = true;
 
     setError("");
     setNotice("");
     setSetup(null);
+    setKnowledgeFile(null);
+    setKnowledgeFileError("");
 
     if (!activeBusiness) {
       setForm(initialForm(null));
@@ -122,6 +154,37 @@ function OnboardingPage() {
     }));
   };
 
+  const handleKnowledgeFile = (file) => {
+    setKnowledgeFileError("");
+
+    if (!file) return;
+
+    if (!isSupportedDocument(file)) {
+      setKnowledgeFileError(
+        "Please select a PDF, DOCX or TXT document."
+      );
+      return;
+    }
+
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      setKnowledgeFileError(
+        "The document must be smaller than 20 MB."
+      );
+      return;
+    }
+
+    setKnowledgeFile(file);
+  };
+
+  const removeKnowledgeFile = () => {
+    setKnowledgeFile(null);
+    setKnowledgeFileError("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const save = async () => {
     if (!activeBusiness) return null;
 
@@ -169,7 +232,9 @@ function OnboardingPage() {
 
     try {
       await save();
-      setNotice("Your business and receptionist configuration were saved.");
+      setNotice(
+        "Your business and receptionist configuration were saved."
+      );
     } catch (cause) {
       setError(
         userFacingErrorMessage(
@@ -190,10 +255,8 @@ function OnboardingPage() {
     setBusy(true);
 
     try {
-      // Save the latest receptionist configuration first.
       await save();
 
-      // Activate the existing Vapi assistant and phone number.
       const result = await api.activateExistingReceptionist(
         activeBusiness.id
       );
@@ -522,6 +585,119 @@ function OnboardingPage() {
               are not currently supported and are not offered as active
               services.
             </p>
+          </div>
+        </Card>
+
+        <Card className="onboarding-section">
+          <div className="onboarding-step-heading">
+            <span className="onboarding-step-number">3</span>
+            <div>
+              <h2>Business knowledge</h2>
+              <p>
+                Upload a document containing your business information.
+                Your AI receptionist will use it to answer customer
+                questions accurately.
+              </p>
+            </div>
+          </div>
+
+          <div
+            className={`knowledge-upload-zone ${
+              isDragging ? "knowledge-upload-dragging" : ""
+            }`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={(event) => {
+              if (
+                !event.currentTarget.contains(event.relatedTarget)
+              ) {
+                setIsDragging(false);
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setIsDragging(false);
+              handleKnowledgeFile(event.dataTransfer.files?.[0]);
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              id="business-knowledge-file"
+              className="sr-only"
+              type="file"
+              accept=".pdf,.docx,.txt"
+              onChange={(event) =>
+                handleKnowledgeFile(event.target.files?.[0])
+              }
+            />
+
+            <label htmlFor="business-knowledge-file">
+              <span className="knowledge-upload-icon">
+                <UploadCloud size={25} />
+              </span>
+
+              <strong>
+                Drag and drop your business document here
+              </strong>
+
+              <span className="knowledge-upload-description">
+                Or click to browse files from your computer
+              </span>
+
+              <span className="knowledge-file-types">
+                PDF · DOCX · TXT
+              </span>
+            </label>
+          </div>
+
+          {knowledgeFile && (
+            <div className="knowledge-selected-file">
+              <span className="knowledge-file-icon">
+                <FileText size={20} />
+              </span>
+
+              <div className="knowledge-file-details">
+                <strong>{knowledgeFile.name}</strong>
+                <span>{formatFileSize(knowledgeFile.size)}</span>
+              </div>
+
+              <button
+                type="button"
+                className="icon-button"
+                onClick={removeKnowledgeFile}
+                aria-label="Remove selected document"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          )}
+
+          {knowledgeFileError && (
+            <div className="knowledge-upload-error" role="alert">
+              {knowledgeFileError}
+            </div>
+          )}
+
+          <div className="knowledge-upload-info">
+            <strong>What should your document contain?</strong>
+
+            <ul>
+              <li>Business details and contact information</li>
+              <li>Services and pricing information</li>
+              <li>Opening hours and service areas</li>
+              <li>Frequently asked questions</li>
+              <li>Business policies and procedures</li>
+            </ul>
+          </div>
+
+          <div className="knowledge-upload-note">
+            <Check size={15} />
+            <span>
+              Your document will be reviewed and processed before its
+              information is added to your receptionist's knowledge.
+            </span>
           </div>
         </Card>
 

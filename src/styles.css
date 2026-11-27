@@ -1552,6 +1552,135 @@ button:disabled { cursor: not-allowed; opacity: .58; }
     padding: 17px;
   }
 }
+.knowledge-upload-zone {
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 10px;
+  background: #fafcfb;
+  transition: .18s ease;
+}
+
+.knowledge-upload-zone:hover,
+.knowledge-upload-dragging {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+.knowledge-upload-zone label {
+  display: flex;
+  min-height: 190px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 25px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.knowledge-upload-icon,
+.knowledge-file-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--green-dark);
+  background: var(--green-soft);
+}
+
+.knowledge-upload-zone label strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.knowledge-upload-description {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.knowledge-file-types {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: white;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.knowledge-selected-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #dce9e1;
+  border-radius: 8px;
+  background: #f8fbf9;
+}
+
+.knowledge-file-details {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.knowledge-file-details strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-file-details span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.knowledge-upload-error {
+  margin-top: 10px;
+  color: var(--red);
+  font-size: 11px;
+}
+
+.knowledge-upload-info {
+  margin-top: 20px;
+}
+
+.knowledge-upload-info strong {
+  font-size: 11.5px;
+}
+
+.knowledge-upload-info ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 20px;
+  margin-top: 12px;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.knowledge-upload-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 11px;
+  border: 1px solid #dcebe2;
+  border-radius: 7px;
+  color: var(--green-dark);
+  background: #f4f9f5;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .knowledge-upload-info ul {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 @media (max-width: 480px) {
   .admin-plan-fields {
